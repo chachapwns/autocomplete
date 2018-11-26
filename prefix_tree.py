@@ -162,16 +162,16 @@ class SimplePrefixTree(Autocompleter):
 
         """
         self.size += 1
-        self.weight_sum += weight
-        self._adjust_weight()
         if self.is_empty():
             self._insert_empty(value, weight, prefix, 0)
         else:
             for subtree in self.subtrees:
                 if subtree.value == prefix[0:len(subtree.value)]:
+                    self._adjust_weight(weight)
                     subtree.insert(value, weight, prefix)
                     return None
                 elif subtree.value == value:
+                    self._adjust_weight(weight)
                     subtree.weight += weight
                     return None
             for i in range(len(self.subtrees)):
@@ -183,6 +183,7 @@ class SimplePrefixTree(Autocompleter):
     def _insert_empty(self, value: Any, weight: float, prefix: List,
                       index: int) -> None:
         """helper function for inserting into an empty tree"""
+        self._adjust_weight(weight)
         if self.value == prefix:
             self.subtrees.append(new_subtree(value, weight, self._weight_type))
         else:
@@ -191,7 +192,8 @@ class SimplePrefixTree(Autocompleter):
                                                     weight, self._weight_type))
             self.subtrees[index]._insert_empty(value, weight, prefix, 0)
 
-    def _adjust_weight(self) -> None:
+    def _adjust_weight(self, weight: float) -> None:
+        self.weight_sum += weight
         if self._weight_type == 'sum':
             self.weight = self.weight_sum
         elif self._weight_type == 'average':
@@ -226,6 +228,38 @@ class SimplePrefixTree(Autocompleter):
             for subtree in self.subtrees:
                 s += subtree._str_indented(depth + 1)
             return s
+
+    def autocomplete(self, prefix: List,
+                     limit: Optional[int] = None) -> List[Tuple[Any, float]]:
+        """Return up to <limit> matches for the given prefix.
+
+        The return value is a list of tuples (value, weight), and must be
+        ordered in non-increasing weight. (You can decide how to break ties.)
+
+        If limit is None, return *every* match for the given prefix.
+
+        Precondition: limit is None or limit > 0.
+        """
+        if self.is_empty():
+            return []
+        else:
+            lst = []
+            if self.value == prefix:
+                lst += self._iterate_helper(limit)
+            elif self.value == prefix[0: len(self.value)]:
+                for subtree in self.subtrees:
+                    lst += subtree.autocomplete(prefix, limit)
+            return lst
+
+    def _iterate_helper(self, limit: Optional[int]) -> List[Tuple[Any, float]]:
+        if self.is_leaf():
+            return [(self.value, self.weight)]
+        else:
+            lst = []
+            for subtree in self.subtrees:
+                if limit is None or len(lst) < limit:
+                    lst.extend(subtree._iterate_helper(limit))
+            return lst
 
 
 def new_subtree(value: Any, weight: float, weight_type: str) -> \
@@ -291,12 +325,14 @@ class CompressedPrefixTree(Autocompleter):
 
 
 if __name__ == '__main__':
-    # tree = new_subtree([], 0, 'sum')
-    # tree.insert('car', 3.0, ['c', 'a', 'r'])
-    # tree.insert('cat', 4.0, ['c', 'a', 't'])
-    # print(str(tree))
+    tree = SimplePrefixTree('average')
+    tree.insert('car', 3.0, ['c', 'a', 'r'])
+    tree.insert('cat', 4.0, ['c', 'a', 't'])
+    tree.insert('citrus', 2.0, ['c', 'i', 't', 'r', 'u', 's'])
+    tree.insert('cut', 1.0, ['c', 'u', 't'])
+    print(tree.autocomplete(['c'], 2))
 
-    import python_ta
-    python_ta.check_all(config={
-        'max-nested-blocks': 4
-    })
+    # import python_ta
+    # python_ta.check_all(config={
+    #     'max-nested-blocks': 4
+    # })
