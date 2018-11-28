@@ -119,10 +119,10 @@ class SimplePrefixTree(Autocompleter):
     """
     value: Any
     weight: float
+    _weight_sum: float
     subtrees: List[SimplePrefixTree]
     _weight_type: str
     size: int
-    subtree_weight: float
 
     def __init__(self, weight_type: str) -> None:
         """Initialize an empty simple prefix tree.
@@ -135,16 +135,16 @@ class SimplePrefixTree(Autocompleter):
         """
         self._weight_type = weight_type
         self.weight = 0
+        self._weight_sum = 0
         self.value = []
         self.subtrees = []
         self.size = 0
-        self.weight_sum = 0
 
-    def __len__(self) -> int:
+    def __len__(self):
         """Returns the amount of leaves in the tree """
         return self.size
 
-    def insert(self, value: Any, weight: float, prefix: List) -> None:
+    def insert(self, value: Any, weight: float, prefix: List):
         """Insert the given value into this Autocompleter.
 
         The value is inserted with the given weight, and is associated with
@@ -160,6 +160,68 @@ class SimplePrefixTree(Autocompleter):
                 1) not in this Autocompleter
                 2) was previously inserted with the SAME prefix sequence
 
+        >>> tree = new_subtree([], 3.0, 'sum')
+        >>> leaf1 = new_subtree('c', 3.0, 'sum')
+        >>> leaf2 = new_subtree('ca', 3.0, 'sum')
+        >>> leaf3 = new_subtree('ba', 3.0, 'sum')
+        >>> subtree1 = new_subtree(['c'], 3.0, 'sum')
+        >>> subtree2 = new_subtree(['c', 'a'], 3.0, 'sum')
+        >>> subtree3 = new_subtree(['b'], 3.0, 'sum')
+        >>> subtree4 = new_subtree(['b', 'a'], 3.0, 'sum')
+        >>> subtree2.subtrees.append(leaf2)
+        >>> subtree1.subtrees.append(leaf1)
+        >>> subtree1.subtrees.append(subtree2)
+        >>> subtree4.subtrees.append(leaf3)
+        >>> subtree3.subtrees.append(subtree4)
+        >>> tree.subtrees.append(subtree1)
+        >>> tree.subtrees.append(subtree3)
+        >>> tree.insert('car', 3.0, ['c','a','r'])
+        >>> tree.subtrees[0].subtrees[1].subtrees[0].subtrees[0].value
+        'car'
+        >>> tree.insert('dog', 3.0, ['d', 'o', 'g'])
+        >>> tree.subtrees[0].subtrees[0].subtrees[0].subtrees[0].value
+        'dog'
+        """
+        self._insert_helper(value, weight, prefix)
+        self._update_order(prefix)
+
+    def _insert_helper(self, value: Any, weight: float, prefix: List):
+        """Insert the given value into this Autocompleter.
+
+        The value is inserted with the given weight, and is associated with
+        the prefix sequence <prefix>.
+
+        If the value has already been inserted into this prefix tree
+        (compare values using ==), then the given weight should be *added* to
+                the existing weight of this value.
+
+        Preconditions:
+            weight > 0
+            The given value is either:
+                1) not in this Autocompleter
+                2) was previously inserted with the SAME prefix sequence
+
+        >>> tree = new_subtree([], 3.0, 'sum')
+        >>> leaf1 = new_subtree('c', 3.0, 'sum')
+        >>> leaf2 = new_subtree('ca', 3.0, 'sum')
+        >>> leaf3 = new_subtree('ba', 3.0, 'sum')
+        >>> subtree1 = new_subtree(['c'], 3.0, 'sum')
+        >>> subtree2 = new_subtree(['c', 'a'], 3.0, 'sum')
+        >>> subtree3 = new_subtree(['b'], 3.0, 'sum')
+        >>> subtree4 = new_subtree(['b', 'a'], 3.0, 'sum')
+        >>> subtree2.subtrees.append(leaf2)
+        >>> subtree1.subtrees.append(leaf1)
+        >>> subtree1.subtrees.append(subtree2)
+        >>> subtree4.subtrees.append(leaf3)
+        >>> subtree3.subtrees.append(subtree4)
+        >>> tree.subtrees.append(subtree1)
+        >>> tree.subtrees.append(subtree3)
+        >>> tree.insert('car', 3.0, ['c','a','r'])
+        >>> tree.subtrees[0].subtrees[1].subtrees[0].subtrees[0].value
+        'car'
+        >>> tree.insert('dog', 3.0, ['d', 'o', 'g'])
+        >>> tree.subtrees[0].subtrees[0].subtrees[0].subtrees[0].value
+        'dog'
         """
         self.size += 1
         if self.is_empty():
@@ -168,7 +230,7 @@ class SimplePrefixTree(Autocompleter):
             for subtree in self.subtrees:
                 if subtree.value == prefix[0:len(subtree.value)]:
                     self._adjust_weight(weight)
-                    subtree.insert(value, weight, prefix)
+                    subtree._insert_helper(value, weight, prefix)
                     return None
                 elif subtree.value == value:
                     self._adjust_weight(weight)
@@ -185,21 +247,30 @@ class SimplePrefixTree(Autocompleter):
         """helper function for inserting into an empty tree"""
         self._adjust_weight(weight)
         if self.value == prefix:
-            self.subtrees.append(new_subtree(value, weight, self._weight_type))
+            self.subtrees.insert(index, new_subtree(value, weight, self._weight_type))
         else:
             self.subtrees.insert(index, new_subtree(self.value +
                                                     [prefix[len(self.value)]],
                                                     weight, self._weight_type))
             self.subtrees[index]._insert_empty(value, weight, prefix, 0)
 
-    def _adjust_weight(self, weight: float) -> None:
-        self.weight_sum += weight
-        if self._weight_type == 'sum':
-            self.weight = self.weight_sum
-        elif self._weight_type == 'average':
-            self.weight = self.weight_sum / self.size
+    def _update_order(self, prefix: list) -> None:
+        if self.is_empty():
+            return None
         else:
-            raise ValueError(f'Invalid weight type {self._weight_type}')
+            for i in range(len(self.subtrees)):
+                if self.subtrees[i].value == prefix[:len(self.subtrees[i].value)]:
+                    for j in range(len(self.subtrees)):
+                        if self.subtrees[i].weight > self.subtrees[j].weight and i != j - 1:
+                            self.subtrees.insert(j, self.subtrees.pop(i))
+                    self.subtrees[i]._update_order(prefix)
+
+    def _adjust_weight(self, weight: float) -> None:
+        self._weight_sum += weight
+        if self._weight_type == 'average':
+            self.weight = self._weight_sum / self.size
+        else:
+            self.weight = self._weight_sum
 
     def is_empty(self) -> bool:
         """Return whether this simple prefix tree is empty."""
@@ -232,12 +303,9 @@ class SimplePrefixTree(Autocompleter):
     def autocomplete(self, prefix: List,
                      limit: Optional[int] = None) -> List[Tuple[Any, float]]:
         """Return up to <limit> matches for the given prefix.
-
         The return value is a list of tuples (value, weight), and must be
         ordered in non-increasing weight. (You can decide how to break ties.)
-
         If limit is None, return *every* match for the given prefix.
-
         Precondition: limit is None or limit > 0.
         """
         if self.is_empty():
@@ -260,6 +328,54 @@ class SimplePrefixTree(Autocompleter):
                 if limit is None or len(lst) < limit:
                     lst.extend(subtree._iterate_helper(limit))
             return lst
+
+    def remove(self, prefix: List) -> None:
+        """Remove all values that match the given prefix.
+        """
+        search_list = self._find_last_double(prefix, self)
+        self._change_all_weights(prefix, search_list[0], search_list[1], search_list[2])
+
+    def _find_last_double(self, prefix: List, last: Optional[SimplePrefixTree]) -> List:
+        """ SOMETHING"""
+        if self.is_empty():
+            return []
+        else:
+            lst = []
+            if self.value == prefix:
+                return [last, self.weight, self.size]
+            elif self.value == prefix[:len(self.value)]:
+                if len(self.subtrees) > 1:
+                    last = self
+                for subtree in self.subtrees:
+                    lst.extend(subtree._find_last_double(prefix, last))
+            return lst
+
+    def _change_all_weights(self, prefix: List, last: SimplePrefixTree, weight_sum: float, removed_size: int) -> None:
+        """SOMETHING"""
+        if self.is_empty():
+            return None
+        else:
+            if self.value == last.value[:len(self.value)]:
+                self.size -= removed_size
+                self._weight_sum -= weight_sum
+                if self.size <= 0:
+                    self.weight = 0
+                else:
+                    if self._weight_type == 'average':
+                        self.weight = self._weight_sum / self.size
+                    else:
+                        self.weight = self._weight_sum
+                if self.value == last.value:
+                    i = 0
+                    while i < len(self.subtrees):
+                        if self.subtrees[i].value == prefix[:len(self.subtrees[i].value)]:
+                            self.subtrees = self.subtrees[:i] + \
+                                            self.subtrees[i+1:]
+                        else:
+                            i += 1
+                else:
+                    for subtree in self.subtrees:
+                        subtree._change_all_weights(prefix, last, weight_sum, removed_size)
 
 
 def new_subtree(value: Any, weight: float, weight_type: str) -> \
@@ -325,14 +441,7 @@ class CompressedPrefixTree(Autocompleter):
 
 
 if __name__ == '__main__':
-    tree = SimplePrefixTree('average')
-    tree.insert('car', 3.0, ['c', 'a', 'r'])
-    tree.insert('cat', 4.0, ['c', 'a', 't'])
-    tree.insert('citrus', 2.0, ['c', 'i', 't', 'r', 'u', 's'])
-    tree.insert('cut', 1.0, ['c', 'u', 't'])
-    print(tree.autocomplete(['c'], 2))
-
-    # import python_ta
-    # python_ta.check_all(config={
-    #     'max-nested-blocks': 4
-    # })
+    import python_ta
+    python_ta.check_all(config={
+        'max-nested-blocks': 4
+    })
