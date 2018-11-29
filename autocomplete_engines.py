@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from melody import Melody
 from prefix_tree import SimplePrefixTree, CompressedPrefixTree
+import re
 
 
 ################################################################################
@@ -66,7 +67,13 @@ class LetterAutocompleteEngine:
         # lines of the file and process them according to the description in
         # this method's docstring.
         with open(config['file'], encoding='utf8') as f:
-            pass
+                if config['autocompleter'] == 'simple':
+                    self.autocompleter = SimplePrefixTree(config['weight_type'])
+                elif config['autocompleter'] == 'compressed':
+                    self.autocompleter = SimplePrefixTree(config['weight_type'])
+                for line in f:
+                    line = re.sub('[^a-z0-9 ]', '', line.lower())
+                    self.autocompleter.insert(line, 1, [char for char in line])
 
     def autocomplete(self, prefix: str,
                      limit: Optional[int] = None) -> List[Tuple[str, float]]:
@@ -84,7 +91,8 @@ class LetterAutocompleteEngine:
             limit is None or limit > 0
             <prefix> contains only lowercase alphanumeric characters and spaces
         """
-        pass
+        prefix_list = [char for char in prefix]
+        return self.autocompleter.autocomplete(prefix_list, limit)
 
     def remove(self, prefix: str) -> None:
         """Remove all strings that match the given prefix string.
@@ -95,7 +103,8 @@ class LetterAutocompleteEngine:
         Precondition: <prefix> contains only lowercase alphanumeric characters
                       and spaces.
         """
-        pass
+        prefix_list = [char for char in prefix]
+        return self.autocompleter.remove(prefix_list)
 
 
 class SentenceAutocompleteEngine:
@@ -144,7 +153,15 @@ class SentenceAutocompleteEngine:
         """
         # We haven't given you any starter code here! You should review how
         # you processed CSV files on Assignment 1.
-        pass
+        with open(config['file'], encoding='utf8') as f:
+                if config['autocompleter'] == 'simple':
+                    self.autocompleter = SimplePrefixTree(config['weight_type'])
+                elif config['autocompleter'] == 'compressed':
+                    self.autocompleter = SimplePrefixTree(config['weight_type'])
+                for line in f:
+                    line = line.split(',')
+                    line[0] = re.sub('[^a-z0-9 ]', '', line[0].lower())
+                    self.autocompleter.insert(line[0], float(line[1]), line[0].split())
 
     def autocomplete(self, prefix: str,
                      limit: Optional[int] = None) -> List[Tuple[str, float]]:
@@ -162,7 +179,8 @@ class SentenceAutocompleteEngine:
             limit is None or limit > 0
             <prefix> contains only lowercase alphanumeric characters and spaces
         """
-        pass
+        prefix_list = prefix.split()
+        return self.autocompleter.autocomplete(prefix_list, limit)
 
     def remove(self, prefix: str) -> None:
         """Remove all strings that match the given prefix.
@@ -173,7 +191,8 @@ class SentenceAutocompleteEngine:
         Precondition: <prefix> contains only lowercase alphanumeric characters
                       and spaces.
         """
-        pass
+        prefix_list = prefix.split()
+        self.autocompleter.remove(prefix_list)
 
 
 ################################################################################
@@ -252,7 +271,7 @@ def sample_letter_autocomplete() -> List[Tuple[str, float]]:
         'autocompleter': 'simple',
         'weight_type': 'sum'
     })
-    return engine.autocomplete('frodo d', 20)
+    return engine.autocomplete('', 20)
 
 
 def sample_sentence_autocomplete() -> List[Tuple[str, float]]:
@@ -290,5 +309,5 @@ if __name__ == '__main__':
     sys.setrecursionlimit(5000)
 
     # print(sample_letter_autocomplete())
-    # print(sample_sentence_autocomplete())
+    print(sample_sentence_autocomplete())
     # sample_melody_autocomplete()
